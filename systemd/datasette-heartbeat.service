@@ -1,0 +1,22 @@
+[Unit]
+Description=Datasette — visualizador web do Heartbeat SQLite
+After=network.target
+
+[Service]
+Type=simple
+# %h é resolvido pelo systemd como o $HOME do user (ex: /home/npu).
+# Se você setou HEARTBEAT_DIR pra outro lugar, ajuste o path do state.db abaixo.
+ExecStart=%h/.local/bin/datasette serve %h/.claude/heartbeat/state.db \
+    --host 0.0.0.0 \
+    --port 8001 \
+    --setting truncate_cells_html 200 \
+    --setting sql_time_limit_ms 5000 \
+    --setting default_page_size 25
+Restart=on-failure
+RestartSec=5
+
+# Datasette opera em modo read-only por padrão — sem risco de lock no DB
+# que o heartbeat (cron) está escrevendo.
+
+[Install]
+WantedBy=default.target

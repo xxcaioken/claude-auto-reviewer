@@ -1,0 +1,27 @@
+# Estado runtime — NÃO versionar
+state.db
+state.db-shm
+state.db-wal
+*.lock
+logs/
+backups/
+
+# Configs reais (use os .example pra commit)
+heartbeat/repos.txt
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo

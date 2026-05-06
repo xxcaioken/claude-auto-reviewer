@@ -1,0 +1,23 @@
+# claude-auto-reviewer — lista de repositórios monitorados
+#
+# Uma linha por repo, formato pipe-separado:
+#   nome_local|path_local|owner/repo_no_github|enabled
+#
+# - nome_local: identificador interno (qualquer string, usado nos logs e SQLite)
+# - path_local: caminho absoluto do clone local (usado pelo /code-review pra ler CLAUDE.md, se existir)
+# - owner/repo: org e nome no GitHub (usado por `gh pr list --repo`)
+# - enabled: 1 = monitorado, 0 = pausado (mantém a linha pra fácil reativação)
+#
+# Linhas começando com # ou vazias são ignoradas.
+#
+# Como usar:
+#   1. Copie pra repos.txt:    cp repos.txt.example ../../<HEARTBEAT_DIR>/repos.txt
+#      (default HEARTBEAT_DIR é ~/.claude/heartbeat)
+#   2. Edite com seus repos.
+#   3. Rode 1x manual pra validar: python3 heartbeat.py
+#   4. Adicione a linha do cron (ver README).
+
+# Exemplos:
+# meu-app|/home/me/repos/meu-app|minha-org/meu-app|1
+# meu-blog|/home/me/projects/blog|minha-org/blog|1
+# legacy-thing|/home/me/repos/legacy|minha-org/legacy|0
