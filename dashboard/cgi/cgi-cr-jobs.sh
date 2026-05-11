@@ -39,7 +39,6 @@ for p in sorted(forced.glob("*.json"), key=lambda x: x.stat().st_mtime):
     except Exception:
         continue
     pid = j.get("pid")
-    started = j.get("started_at", "")
     # idade aproximada via mtime
     age = now - p.stat().st_mtime
     is_orphan = (pid and not pid_alive(pid)) and age > ORPHAN_AFTER
@@ -59,7 +58,7 @@ recently_done = []
 for p in sorted(done.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True):
     age = now - p.stat().st_mtime
     if age > 30:
-        continue  # mtime pode ter sido atualizado depois do sort; itera tudo
+        continue  # sort por mtime pode estar stale (race); checa todos por seguranca
     try:
         recently_done.append(json.loads(p.read_text()))
     except Exception:
