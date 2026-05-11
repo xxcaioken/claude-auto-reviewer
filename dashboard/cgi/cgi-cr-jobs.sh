@@ -45,7 +45,7 @@ for p in sorted(forced.glob("*.json"), key=lambda x: x.stat().st_mtime):
     is_orphan = (pid and not pid_alive(pid)) and age > ORPHAN_AFTER
     if is_orphan:
         j["status"] = "orphaned"
-        j["finished_at"] = j.get("finished_at") or ""
+        j["finished_at"] = j.get("finished_at") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         try:
             (done / p.name).write_text(json.dumps(j, indent=2))
             p.unlink()
@@ -59,7 +59,7 @@ recently_done = []
 for p in sorted(done.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True):
     age = now - p.stat().st_mtime
     if age > 30:
-        break  # estão ordenados desc por mtime, então fim da lista útil
+        continue  # mtime pode ter sido atualizado depois do sort; itera tudo
     try:
         recently_done.append(json.loads(p.read_text()))
     except Exception:
