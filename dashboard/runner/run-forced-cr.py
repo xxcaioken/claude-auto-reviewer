@@ -11,9 +11,9 @@ import json
 import logging
 import os
 import re
-import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 # Importa do heartbeat.py (mesmo dir do state.db por convenção do install.sh).
@@ -63,7 +63,11 @@ def load_repos_map():
     -> nome curto do repo (ex.: 'hinc-dashboards-backend'), pra cravar
     o campo `repo` na tabela igual o heartbeat faz."""
     out = {}
-    for line in (HEARTBEAT_DIR / "repos.txt").read_text().splitlines():
+    try:
+        lines = (HEARTBEAT_DIR / "repos.txt").read_text().splitlines()
+    except OSError as e:
+        raise RuntimeError(f"repos.txt not readable: {e}") from e
+    for line in lines:
         line = line.strip()
         if not line or line.startswith("#"):
             continue
@@ -108,6 +112,8 @@ def main():
 
     FORCED_DIR.mkdir(parents=True, exist_ok=True)
     DONE_DIR.mkdir(parents=True, exist_ok=True)
+    # Assume caller (cgi-cr-force.sh) supplied a unique job_id; we don't guard
+    # against collision here. CGI uses `date +%Y%m%d-%H%M%S-<random hex>`.
     job_path = FORCED_DIR / f"{job_id}.json"
     done_path = DONE_DIR / f"{job_id}.json"
 
@@ -121,7 +127,7 @@ def main():
         "started_at": now_iso(),
         "finished_at": None,
         "comment_id": None,
-        "runned": None,
+        "runned": False,
         "rc": None,
         "log_tail": "",
     }
@@ -129,7 +135,14 @@ def main():
     log.info("job %s: pending, pid=%d, url=%s", job_id, os.getpid(), url)
 
     # Resolve nome curto do repo (heartbeat usa esse formato em code_reviews.repo)
-    repos_map = load_repos_map()
+    try:
+        repos_map = load_repos_map()
+    except RuntimeError as e:
+        log.error("job %s: %s", job_id, e)
+        state.update(status="failed", finished_at=now_iso(), log_tail=str(e))
+        write_job(job_path, state)
+        os.replace(job_path, done_path)
+        sys.exit(3)
     if github_repo not in repos_map:
         log.error("job %s: repo %s não está em repos.txt enabled=1",
                   job_id, github_repo)
@@ -142,10 +155,8 @@ def main():
 
     # Adquire o lock — bloqueia até LOCK_WAIT_SEC se tick rolar
     LOCKFILE.parent.mkdir(parents=True, exist_ok=True)
-    lock_fh = open(LOCKFILE, "w")
-    try:
+    with open(LOCKFILE, "w") as lock_fh:
         # Espera não-bloqueante com timeout manual
-        import time
         deadline = time.monotonic() + LOCK_WAIT_SEC
         while True:
             try:
@@ -217,13 +228,7 @@ def main():
             conn.close()
 
         write_job(job_path, state)
-
-    finally:
-        try:
-            fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
-        except Exception:
-            pass
-        lock_fh.close()
+        # Lock released implicitly when the `with` block exits (fd closed)
 
     # Move pra done/ e poda
     os.replace(job_path, done_path)
