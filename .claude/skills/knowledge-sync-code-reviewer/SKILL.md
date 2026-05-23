@@ -273,6 +273,8 @@ Output:
 
 **Read-only: nenhuma modificação nos 6 vaults.**
 
+**Nomes literais** (sem fuzzy match): `regras-negocio.md` e `bugs-conhecidos.md`. Variantes (ex: `regras-de-negocio.md`) são reportadas como ⚠️ por design — força convenção esperada por `commands/code-review.md`.
+
 ```bash
 TARGETS_FILE=".claude/skills/knowledge-sync-code-reviewer/targets.txt"
 [ ! -f "$TARGETS_FILE" ] && echo "❌ targets.txt não encontrado" && exit 1
@@ -298,18 +300,22 @@ while IFS= read -r repo; do
   adr_count=$(ls "$vault_path"/ADR-*.md 2>/dev/null | wc -l)
 
   # Status: ✅ se ambos OK, ⚠️ se 1 falta, ❌ se vault ausente (já tratado acima)
+  # Nota: usar `repo_status` em vez de `status` — `status` é read-only built-in em zsh.
   if [ "$has_regras" = "✓" ] && [ "$has_bugs" = "✓" ]; then
-    status="✅"
+    repo_status="✅"
   else
-    status="⚠️"
+    repo_status="⚠️"
   fi
 
   printf "  %s %-30s regras-negocio.md %s  bugs-conhecidos.md %s  ADRs: %d\n" \
-    "$status" "$repo" "$has_regras" "$has_bugs" "$adr_count"
+    "$repo_status" "$repo" "$has_regras" "$has_bugs" "$adr_count"
 done < "$TARGETS_FILE"
 ```
 
 Output:
+
+<!-- Exemplo ilustrativo: mostra o que ⚠️ pareceria. Saída real depende do estado dos vaults. -->
+
 ```
 ### Targets check (--check-targets)
   ✅ hinc-backend                regras-negocio.md ✓  bugs-conhecidos.md ✓  ADRs: 5
