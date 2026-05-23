@@ -44,7 +44,7 @@ Adiciona check 8 (verifica estrutura dos 6 vaults NPU em `~/code/<repo>/Claude/`
 
 ## O que cada check faz
 
-Detalhamento em `.claude/skills/knowledge-sync-code-reviewer/SKILL.md`. Resumo:
+Detalhamento em `.claude/skills/knowledge-sync-code-reviewer/SKILL.md` (neste repo). Resumo:
 
 1. **Diagnóstico do diff** — decide MODE (rápido vs completo) baseado em mudanças recentes.
 2. **Line numbers** — funções em `heartbeat.py` batem com tabela em `arquitetura.md` e `modulo-heartbeat.md`?
@@ -56,6 +56,8 @@ Detalhamento em `.claude/skills/knowledge-sync-code-reviewer/SKILL.md`. Resumo:
 8. **Targets check** (opt-in) — vaults dos 6 NPU têm os arquivos que `code-review.md` espera ler?
 
 ## Output esperado (estado limpo)
+
+> **Nota:** valores abaixo são snapshot de 2026-05-23. Contagens reais variam à medida que o vault evolui — confiar no output da skill, não nestes números.
 
 ```
 ## Knowledge Sync Code-Reviewer Report — 2026-05-23 17:42
