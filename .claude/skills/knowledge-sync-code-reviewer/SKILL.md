@@ -121,3 +121,146 @@ Se cobertura <100%, listar notas faltantes:
 FALTA:
 - <nome-da-nota>
 ```
+
+### Check 4 — Sync matrix (mudança óbvia)
+
+Verifica se mudanças em código foram acompanhadas de mudanças nas notas correspondentes. **Pular este check se Check 1 reportou MODE: validação rápida.**
+
+Matriz de relações:
+
+| Arquivo de código mudou | Nota(s) que deveria atualizar |
+|---|---|
+| `heartbeat/heartbeat.py` | `Claude/modulo-heartbeat.md` ∧ `Claude/arquitetura.md` |
+| `commands/code-review.md` | `Claude/regras-prompt-review.md` |
+| `install.sh` | `Claude/deploy.md` ∧ `Claude/ADR-003-symlinks-no-install.md` |
+| SCHEMA SQL (string const em `heartbeat.py`) | `Claude/arquitetura-banco.md` |
+| `.env.example` | `Claude/env-setup.md` |
+
+```bash
+# Determinar base — repo jovem pode não ter HEAD~10
+BASE=$(git rev-list --max-count=10 HEAD | tail -1)
+
+# Arquivos de código e vault no diff
+code_changed=$(git diff --name-only "$BASE..HEAD" | grep -E '^(heartbeat/|commands/|install\.sh|\.env\.example)')
+vault_changed=$(git diff --name-only "$BASE..HEAD" | grep -E '^Claude/')
+
+echo "Código mudou: $code_changed"
+echo "Vault mudou: $vault_changed"
+```
+
+Pra cada arquivo de código no diff, verificar se a(s) nota(s) esperada(s) também está(ão) no diff. Se não → flag `⚠️ vault drift suspeito`.
+
+Output:
+```
+### Sync matrix
+| Código mudou | Nota atualizada? |
+|---|---|
+| heartbeat/heartbeat.py | modulo-heartbeat.md ✅  arquitetura.md ❌ |
+| commands/code-review.md | regras-prompt-review.md ✅ |
+```
+
+### Check 5 — ADRs pendentes (heurística)
+
+Detecta mudanças estruturais sem nova ADR. **Pular este check se Check 1 reportou MODE: validação rápida.**
+
+Heurística:
+- `heartbeat.py` mudou >50 LOC desde os últimos 10 commits SEM novo `Claude/ADR-*.md` no diff.
+- OU `commands/code-review.md` mudou >30 LOC SEM novo `Claude/ADR-*.md` no diff.
+
+```bash
+BASE=$(git rev-list --max-count=10 HEAD | tail -1)
+
+heartbeat_loc=$(git diff --stat "$BASE..HEAD" -- heartbeat/heartbeat.py | tail -1 | grep -oP '\d+(?= insertion)' || echo 0)
+prompt_loc=$(git diff --stat "$BASE..HEAD" -- commands/code-review.md | tail -1 | grep -oP '\d+(?= insertion)' || echo 0)
+new_adrs=$(git diff --name-only --diff-filter=A "$BASE..HEAD" | grep -c '^Claude/ADR-')
+
+echo "heartbeat.py LOC: $heartbeat_loc | code-review.md LOC: $prompt_loc | novos ADRs: $new_adrs"
+```
+
+Se `heartbeat_loc > 50` E `new_adrs == 0` → flag `⚠️ heartbeat.py mudou N LOC sem novo ADR — verificar se há decisão estrutural`.
+
+Falsos positivos esperados (refactor sem mudança de decisão). Humano filtra.
+
+Output:
+```
+### ADRs pendentes
+- ✅ Mudanças cabíveis em ADRs existentes
+ou
+- ⚠️ heartbeat.py mudou N LOC sem novo ADR — verificar
+```
+
+### Check 6 — Validação básica
+
+Sempre roda, independente do modo.
+
+```bash
+# Total notas substantivas + templates
+total_notas=$(find Claude/ -name '*.md' -not -path '*/_templates/*' -type f | wc -l)
+total_templates=$(find Claude/_templates/ -name '*.md' -type f 2>/dev/null | wc -l)
+
+# Total links
+total_links=$(grep -ro '\[\[' Claude/ --include='*.md' | wc -l)
+
+# Ilhas (zero outbound links, excluir templates)
+ilhas=$(find Claude/ -name "*.md" -not -path "*/_templates/*" -type f -print0 | while IFS= read -r -d '' f; do
+  out=$(grep -co '\[\[' "$f" 2>/dev/null)
+  if [ "${out:-0}" -eq 0 ]; then echo "$f"; fi
+done | wc -l)
+
+# Sem frontmatter
+sem_fm=$(find Claude/ -name "*.md" -type f -print0 | while IFS= read -r -d '' f; do
+  has_fm=$(head -1 "$f" | grep -c "^---$")
+  if [ "$has_fm" -eq 0 ]; then echo "$f"; fi
+done | wc -l)
+
+# Broken links (com path resolution correto, ignora placeholders intencionais)
+broken=$(for f in Claude/*.md Claude/_templates/*.md; do
+  grep -oE '\[\[[^]|#]+' "$f" 2>/dev/null | sed 's/\[\[//' | sort -u | while read link; do
+    [ -z "$link" ] && continue
+    [ "$link" = "outra-nota" ] && continue
+    target_root="Claude/${link}.md"
+    target_tpl="Claude/_templates/$(basename ${link}).md"
+    if [ ! -f "$target_root" ] && [ ! -f "$target_tpl" ] && [ ! -f "Claude/${link}" ]; then
+      echo "BROKEN em $(basename "$f"): [[$link]]"
+    fi
+  done
+done | sort -u | wc -l)
+
+echo "Notas: $total_notas + $total_templates templates"
+echo "Links: $total_links"
+echo "Ilhas: $ilhas | Sem FM: $sem_fm | Broken: $broken"
+```
+
+Output:
+```
+### Validação básica
+- N notas substantivas + M templates
+- L wikilinks
+- I ilhas, F sem frontmatter, B broken links (placeholders ignorados)
+```
+
+### Check 7 — Áreas universais
+
+Validar que as 3 notas mínimas (fallback genérico) existem e têm boa rede inbound.
+
+```bash
+for area in regras-negocio glossario arquitetura; do
+  count=$(ls Claude/${area}*.md 2>/dev/null | wc -l)
+  links=$(grep -rl "\[\[${area}" Claude/ --include="*.md" 2>/dev/null | wc -l)
+  if [ "$count" -eq 0 ]; then
+    echo "❌ $area: NOTA FALTA"
+  elif [ "$links" -lt 3 ]; then
+    echo "⚠️ $area: $count nota(s), $links inbound (deveria ter ≥3)"
+  else
+    echo "✅ $area: $count nota(s), $links inbound"
+  fi
+done
+```
+
+Output:
+```
+### Áreas universais
+- ✅ regras-negocio: 18 inbound
+- ✅ glossario: 3 inbound
+- ✅ arquitetura: 20 inbound
+```
