@@ -36,7 +36,9 @@ Coisas que esta skill NUNCA faz:
 Lista o que mudou desde os últimos 10 commits nos arquivos que vault precisa acompanhar.
 
 ```bash
-git diff --stat HEAD~10..HEAD -- heartbeat/ commands/ install.sh .env.example .obsidian/ 2>/dev/null
+# Determinar base — repo jovem pode não ter HEAD~10
+BASE=$(git rev-list --max-count=10 HEAD | tail -1)
+git diff --stat "$BASE..HEAD" -- heartbeat/ commands/ install.sh .env.example .obsidian/
 ```
 
 Decisão de modo:
@@ -80,26 +82,29 @@ T1 substantivas (não-MOC) e T2 grandes (>200 linhas) devem ter seção `## Regr
 
 ```bash
 # T1 substantivas (excluir MOCs)
-total_t1_sub=0; t1_sub_ok=0
-for f in $(grep -rl "^tier: 1" Claude/ --include="*.md" 2>/dev/null); do
+# Usar while + process substitution pra suportar filenames com espaços
+total_t1_sub=0
+t1_sub_ok=0
+while IFS= read -r f; do
   bn=$(basename "$f" .md)
-  [[ "$bn" == _MOC* ]] && continue
+  case "$bn" in _MOC*) continue;; esac
   total_t1_sub=$((total_t1_sub + 1))
   has=$(grep -c "^## Regras e Invariantes" "$f")
   [ "$has" -gt 0 ] && t1_sub_ok=$((t1_sub_ok + 1))
-done
+done < <(grep -rl "^tier: 1" Claude/ --include="*.md" 2>/dev/null)
 echo "T1 substantivas: $t1_sub_ok / $total_t1_sub"
 
 # T2 grandes (>200 linhas)
-total_t2_big=0; t2_big_ok=0
-for f in $(grep -rl "^tier: 2" Claude/ --include="*.md" 2>/dev/null); do
+total_t2_big=0
+t2_big_ok=0
+while IFS= read -r f; do
   lines=$(wc -l < "$f")
   if [ "$lines" -gt 200 ]; then
     total_t2_big=$((total_t2_big + 1))
     has=$(grep -c "^## Regras e Invariantes" "$f")
     [ "$has" -gt 0 ] && t2_big_ok=$((t2_big_ok + 1))
   fi
-done
+done < <(grep -rl "^tier: 2" Claude/ --include="*.md" 2>/dev/null)
 echo "T2 grandes (>200 linhas): $t2_big_ok / $total_t2_big"
 ```
 
