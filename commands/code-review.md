@@ -38,6 +38,7 @@ Ao final, ofereça via `AskUserQuestion`: salvar relatório em arquivo, publicar
 4. **TOM PROFISSIONAL**: Sem saudações. Sem repetir comando. Sem confirmar regras. Aja como ferramenta.
 5. **POSTAGEM DIRETA**: Você posta via `gh pr comment <num> --repo <owner>/<repo> --body-file -` (input via heredoc/stdin). Ao final do comando, retorne apenas: `Publicado em <url-do-comentário>`. **NÃO** repita o Markdown na saída.
 6. **MARCADOR OBRIGATÓRIO**: A primeira linha do corpo do comentário publicado **DEVE** ser `<!-- code-review-bot:v1 -->`. Sem isso, o Heartbeat não detecta.
+7. **CONSULTAR VAULT QUANDO EXISTE**: se `<REPO_PATH>/Claude/` existe, ler arquivos prioritários (regras-negocio, bugs-conhecidos, ADR-*) antes da análise e citar referências no comentário quando aplicável. Detalhes em §"Contexto do repo via Obsidian vault" abaixo. Graceful degradation total quando ausente.
 
 ---
 
@@ -58,6 +59,87 @@ git diff --cached
 ```
 
 Também leia o `CLAUDE.md` do repositório (se existir) para padrões específicos. Em modo Heartbeat, o repo costuma estar clonado localmente — o path real está na coluna `path` da linha do repo em `repos.txt`; tente `cat <REPO_PATH>/CLAUDE.md 2>/dev/null` antes de revisar.
+
+---
+
+## Contexto do repo via Obsidian vault (opcional, mas preferir quando existir)
+
+Vários repos do ecossistema mantêm um vault Obsidian em `<REPO_PATH>/Claude/` que documenta arquitetura, regras de negócio, ADRs e bugs conhecidos. Quando esse vault existe, **leia-o antes da análise** para contextualizar o review. Quando não existe, comporte-se exatamente como antes — sem mencionar a ausência do vault no comentário.
+
+### Detecção (cascata em 3 níveis)
+
+Tente em ordem, pare na primeira que funcionar:
+
+```bash
+# Modo Heartbeat — pegar nome do repo e path declarado de ~/.claude/heartbeat/repos.txt
+# Linha tem formato: nome_local|path_local|owner/repo|enabled
+# <REPO_PATH> vem do 2º campo, <REPO_BASENAME> = basename do 3º campo (owner/repo → repo)
+
+# 1. Path declarado no repos.txt (forma canônica)
+if [ -d "<REPO_PATH>/Claude" ]; then
+  CLAUDE_VAULT="<REPO_PATH>/Claude"
+
+# 2. Convenção do ecossistema NPU-Brain — repos clonados em ~/code/<repo>
+elif [ -d "$HOME/code/<REPO_BASENAME>/Claude" ]; then
+  CLAUDE_VAULT="$HOME/code/<REPO_BASENAME>/Claude"
+
+# 3. Modo Interativo — Claude já está no cwd do repo
+elif [ -d "./Claude" ]; then
+  CLAUDE_VAULT="./Claude"
+
+else
+  CLAUDE_VAULT=""  # Sem vault — graceful degradation
+fi
+
+if [ -n "$CLAUDE_VAULT" ] && [ -d "$CLAUDE_VAULT" ]; then
+  ls "$CLAUDE_VAULT"/*.md 2>/dev/null
+fi
+```
+
+**Por que o fallback `~/code/<repo>`**: no ecossistema NPU-Brain, todos os repos são clonados via `npu-brain-setup.sh` em `~/code/<repo>/` (convenção documentada em `~/code/hinc-backend/README.md`). Se o `path_local` em `repos.txt` está apontando pra `/dev/null` (placeholder do `.example`) ou pra path obsoleto, o fallback pega.
+
+**Repos fora do ecossistema NPU** (`path_local` válido OU sem `Claude/` em `~/code/<repo>/`): caem no caminho 1 ou no graceful degradation. Sem mudança de comportamento.
+
+### Arquivos prioritários (ler nesta ordem, pular ausentes)
+
+1. **`Claude/regras-negocio.md`** — invariantes operacionais. Violação é tipicamente 🔴 ou 🟡.
+2. **`Claude/bugs-conhecidos.md`** — bugs documentados. Se o PR reintroduz um, flag explícito.
+3. **`Claude/ADR-*.md`** — decisões arquiteturais. Se o PR contradiz uma, citar a ADR e elevar severidade.
+4. **`Claude/regras-*.md`** — regras técnicas específicas (multi-tenancy, queries SQL, validação, etc.). Ler as relevantes à área do diff.
+5. **`Claude/arquitetura.md`** + **`Claude/arquitetura-banco.md`** — consultar se a mudança toca camadas estruturais (rotas, schema, módulos novos).
+
+Em PRs pequenos (<200 linhas), focar em 1+2+3. Em PRs maiores, expandir pelas regras-* da área tocada.
+
+### Como usar no comentário
+
+Ao identificar problema, **citar a nota explicitamente** (não parafrasear sem fonte):
+
+- **Violação de regra**: `Viola [[Claude/regras-multi-tenancy]] §"Sempre filtrar por workgroup_id" — endpoint /api/users em users.py:42 não filtra.`
+- **Contradição de ADR**: `Esta abordagem contraria [[Claude/ADR-002-soft-delete]] — preferir flag em vez de DELETE.`
+- **Reintrodução de bug**: `Reintroduz o padrão descrito em [[Claude/bugs-conhecidos]] §B-007 (N+1 em relatórios).`
+- **Quebra de invariante arquitetural**: `Adiciona dep externa, contraria [[Claude/dependencias]] §"Stdlib only".`
+
+Ao destacar acerto:
+- `✅ Segue corretamente [[Claude/regras-react-query]] §"Sempre usar key array com tenant_id".`
+
+### Como o vault afeta severidade
+
+- **Violação de regra documentada** → no mínimo 🟡 (geralmente 🔴 se a regra protege invariante de segurança/dados).
+- **Contradição de ADR** → 🔴 a menos que a mudança proponha **revisar** a ADR explicitamente no corpo do PR.
+- **Reintrodução de bug conhecido** → 🔴.
+- **Mudança que toca área documentada mas vault não foi atualizado** → não criar issue formal (o autor do PR não é responsável pelo vault), mas pode mencionar no Resumo Executivo: `> 📚 PR toca área coberta por [[Claude/regras-X]] — vale revisar se as regras ainda batem.`
+
+### Limites e graceful degradation
+
+- **Sem vault → review genérico stack-agnostic como sempre.** Não comentar a ausência.
+- **Vault parcial é normal.** Usar o que existir, não exigir cobertura completa.
+- **Vault pode estar stale.** Tratar como guia forte, não fato absoluto. Sempre cruzar com o código atual do diff. Se a nota referencia "linha 120" e a função está em "linha 145" no diff, é provável que o vault tem drift — confiar na regra/conceito, não no número.
+- **Nunca citar nota que você não leu.** Se não conseguiu acessar `regras-negocio.md`, não fingir.
+- **Não substituir análise pelo vault.** O vault é contexto adicional; segurança/performance/lógica continuam sendo o foco primário.
+
+### Custo
+
+Vault típico tem ~80-200KB. Ler completo é viável em context Opus mas adiciona ~3-5K tokens por revisão. Mitigar lendo seletivo pela área do diff em PRs pequenos.
 
 ---
 
