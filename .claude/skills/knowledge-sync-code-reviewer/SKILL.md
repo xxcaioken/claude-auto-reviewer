@@ -217,7 +217,9 @@ done | wc -l)
 broken=$(for f in Claude/*.md Claude/_templates/*.md; do
   grep -oE '\[\[[^]|#]+' "$f" 2>/dev/null | sed 's/\[\[//' | sort -u | while read link; do
     [ -z "$link" ] && continue
-    [ "$link" = "outra-nota" ] && continue
+    [ "$link" = "outra-nota" ] && continue          # placeholder do template nota-livre
+    [ "$link" = "Claude/regras-X" ] && continue     # placeholder de convenção (ADR-006)
+    link="${link#Claude/}"                           # strip path prefix se presente
     target_root="Claude/${link}.md"
     target_tpl="Claude/_templates/$(basename ${link}).md"
     if [ ! -f "$target_root" ] && [ ! -f "$target_tpl" ] && [ ! -f "Claude/${link}" ]; then
