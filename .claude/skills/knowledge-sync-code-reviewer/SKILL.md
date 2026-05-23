@@ -266,3 +266,78 @@ Output:
 - ✅ glossario: 3 inbound
 - ✅ arquitetura: 20 inbound
 ```
+
+### Check 8 — Targets check (opt-in, `--check-targets`)
+
+**Só roda se a invocação foi com flag `--check-targets`.** Verifica que os vaults dos repos NPU listados em `targets.txt` têm a estrutura esperada pelo `commands/code-review.md` (via ADR-006).
+
+**Read-only: nenhuma modificação nos 6 vaults.**
+
+```bash
+TARGETS_FILE=".claude/skills/knowledge-sync-code-reviewer/targets.txt"
+[ ! -f "$TARGETS_FILE" ] && echo "❌ targets.txt não encontrado" && exit 1
+
+while IFS= read -r repo; do
+  # Pular comentários e linhas vazias
+  [[ "$repo" =~ ^[[:space:]]*# ]] && continue
+  [ -z "$(echo "$repo" | tr -d '[:space:]')" ] && continue
+
+  vault_path="$HOME/code/$repo/Claude"
+
+  if [ ! -d "$vault_path" ]; then
+    printf "  ❌ %-30s vault ausente em %s\n" "$repo" "$vault_path"
+    continue
+  fi
+
+  has_regras="❌"
+  [ -f "$vault_path/regras-negocio.md" ] && has_regras="✓"
+
+  has_bugs="❌"
+  [ -f "$vault_path/bugs-conhecidos.md" ] && has_bugs="✓"
+
+  adr_count=$(ls "$vault_path"/ADR-*.md 2>/dev/null | wc -l)
+
+  # Status: ✅ se ambos OK, ⚠️ se 1 falta, ❌ se vault ausente (já tratado acima)
+  if [ "$has_regras" = "✓" ] && [ "$has_bugs" = "✓" ]; then
+    status="✅"
+  else
+    status="⚠️"
+  fi
+
+  printf "  %s %-30s regras-negocio.md %s  bugs-conhecidos.md %s  ADRs: %d\n" \
+    "$status" "$repo" "$has_regras" "$has_bugs" "$adr_count"
+done < "$TARGETS_FILE"
+```
+
+Output:
+```
+### Targets check (--check-targets)
+  ✅ hinc-backend                regras-negocio.md ✓  bugs-conhecidos.md ✓  ADRs: 5
+  ✅ hinc-onepage                regras-negocio.md ✓  bugs-conhecidos.md ✓  ADRs: 6
+  ⚠️  hinc-dashboards            regras-negocio.md ✓  bugs-conhecidos.md ❌  ADRs: 8
+  ✅ hinc-etl                    regras-negocio.md ✓  bugs-conhecidos.md ✓  ADRs: 0
+  ⚠️  hinc-pda-frontend          regras-negocio.md ❌  bugs-conhecidos.md ✓  ADRs: 4
+  ✅ hinc-dashboards-backend     regras-negocio.md ✓  bugs-conhecidos.md ✓  ADRs: 3
+```
+
+Status `⚠️` significa: o reviewer (`commands/code-review.md`) espera ler esse arquivo mas ele não existe. Pode ser gap legítimo (repo simples não tem bugs documentados) ou drift (renomeou/removeu). Humano decide.
+
+## Formato do relatório final
+
+Gerar relatório completo em markdown, salvar opcionalmente em `~/.claude/heartbeat/logs/knowledge-sync-cr-YYYY-MM-DD-HHMM.log` (criar diretório se não existir):
+
+```markdown
+## Knowledge Sync Code-Reviewer Report — YYYY-MM-DD HH:MM
+
+### Modo
+{validação rápida | validação completa | validação completa + targets}
+
+[seções dos checks 1-7, mais 8 se --check-targets]
+
+### Gaps acionáveis
+- [ ] <gap 1 derivado dos checks acima>
+- [ ] <gap 2>
+...
+```
+
+Imprimir no stdout sempre. Salvar em arquivo opcional (se diretório `~/.claude/heartbeat/logs/` existe).
