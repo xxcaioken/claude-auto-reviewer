@@ -1,0 +1,20 @@
+{
+  "alwaysUpdateLinks": true,
+  "userIgnoreFilters": [
+    "node_modules",
+    "build",
+    "dist",
+    ".git",
+    "__pycache__",
+    "coverage",
+    ".cache",
+    "*.pyc",
+    "commands",
+    "heartbeat",
+    "systemd",
+    "install.sh",
+    "LICENSE",
+    "README.md",
+    "Claude/_templates"
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "renderNullAs": "—",
+  "taskCompletionTracking": true,
+  "enableDataviewJs": false,
+  "enableInlineDataview": true
+}
