@@ -1,5 +1,0 @@
-{
-  "templates_folder": "Claude/_templates",
-  "trigger_on_file_creation": false,
-  "auto_jump_to_cursor": true
-}

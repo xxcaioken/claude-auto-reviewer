@@ -1,8 +1,0 @@
-{
-  "autoSaveInterval": 0,
-  "autoPullOnBoot": true,
-  "autoPullInterval": 0,
-  "autoPushAfterCommit": false,
-  "commitMessage": "vault: atualizar notas Claude",
-  "pullBranch": "main"
-}
