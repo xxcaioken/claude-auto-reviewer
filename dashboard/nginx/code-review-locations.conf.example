@@ -1,0 +1,40 @@
+# Inclua estas 3 locations no vhost que serve o dashboard.
+# Ajuste o SCRIPT_FILENAME pra apontar onde os symlinks dos CGI vivem
+# (no servidor hinc-wiki: /home/npu/bin/cgi-cr-*.sh).
+# Ajuste a allow-list de IP pra sua LAN.
+
+location = /api/code-review/list {
+    allow 127.0.0.1;
+    allow ::1;
+    allow 192.168.15.0/24;   # ajuste pra sua LAN
+    deny all;
+
+    include /etc/nginx/fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME /home/npu/bin/cgi-cr-list.sh;
+    fastcgi_pass unix:/run/fcgiwrap.socket;
+    fastcgi_read_timeout 10s;
+}
+
+location = /api/code-review/jobs {
+    allow 127.0.0.1;
+    allow ::1;
+    allow 192.168.15.0/24;
+    deny all;
+
+    include /etc/nginx/fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME /home/npu/bin/cgi-cr-jobs.sh;
+    fastcgi_pass unix:/run/fcgiwrap.socket;
+    fastcgi_read_timeout 10s;
+}
+
+location = /api/code-review/force {
+    allow 127.0.0.1;
+    allow ::1;
+    allow 192.168.15.0/24;
+    deny all;
+
+    include /etc/nginx/fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME /home/npu/bin/cgi-cr-force.sh;
+    fastcgi_pass unix:/run/fcgiwrap.socket;
+    fastcgi_read_timeout 5s;
+}

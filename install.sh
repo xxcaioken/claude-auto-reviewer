@@ -90,6 +90,26 @@ else
 fi
 echo
 
+bold "Dashboard estilizado (opcional)"
+echo "  Cria symlinks pros 3 CGI + runner em \$BIN_DIR (default ~/bin)."
+echo "  Requer nginx + fcgiwrap configurados separadamente."
+read -p "  Instalar agora? [s/N] " ans
+if [[ "$ans" =~ ^[sSyY]$ ]]; then
+    BIN_DIR="${BIN_DIR:-$HOME/bin}"
+    mkdir -p "$BIN_DIR"
+    for f in cgi-cr-list.sh cgi-cr-jobs.sh cgi-cr-force.sh; do
+        ln -sf "$REPO_DIR/dashboard/cgi/$f" "$BIN_DIR/$f"
+        ok "symlinked $BIN_DIR/$f"
+    done
+    ln -sf "$REPO_DIR/dashboard/runner/run-forced-cr.py" "$BIN_DIR/run-forced-cr.py"
+    ok "symlinked $BIN_DIR/run-forced-cr.py"
+    warn "Próximos passos manuais: incluir 'dashboard/nginx/code-review-locations.conf.example' no vhost do nginx,"
+    warn "  copiar 'dashboard/web/index.html' pro DocumentRoot, e dar reload no nginx."
+else
+    echo "  pulando dashboard. Pra instalar depois, rode novamente este script."
+fi
+echo
+
 bold "Cron (linha sugerida)..."
 echo "  Adicione ao seu crontab pra rodar a cada 5 min:"
 echo

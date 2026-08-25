@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Reviews — HINC-WIKI</title>
+<style>
+  :root {
+    --primary: #1a365d; --primary-light: #2b6cb0;
+    --green: #38a169; --green-light: #c6f6d5;
+    --red: #c53030; --red-light: #fed7d7;
+    --yellow: #d69e2e; --yellow-light: #fefcbf;
+    --gray: #718096; --gray-light: #e2e8f0;
+    --bg: #f7fafc; --card-bg: #ffffff;
+    --text: #2d3748; --text-light: #4a5568;
+    --code-bg: #edf2f7;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08);
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         background: var(--bg); color: var(--text); padding: 20px; line-height: 1.5; }
+  .container { max-width: 1280px; margin: 0 auto; }
+  header { display: flex; justify-content: space-between; align-items: center;
+           margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+  header h1 { color: var(--primary); font-size: 1.5rem; }
+  header h1 a { color: inherit; text-decoration: none; opacity: .6; font-weight: 400; font-size: .85em; }
+  header h1 a:hover { opacity: 1; }
+  .meta { font-size: .85rem; color: var(--text-light); }
+
+  .panel { background: var(--card-bg); border-radius: var(--radius);
+           padding: 16px 18px; box-shadow: var(--shadow); margin-bottom: 18px; }
+  .panel h2 { font-size: .85rem; text-transform: uppercase; letter-spacing: .04em;
+              color: var(--primary); margin-bottom: 12px; font-weight: 600; }
+
+  .force-row { display: flex; gap: 10px; align-items: center; }
+  .force-row input[type="text"] {
+    flex: 1; padding: 9px 12px; border: 1px solid var(--gray-light);
+    border-radius: 8px; font-size: .9rem;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  .force-row input[type="text"]:focus { outline: none; border-color: var(--primary-light); }
+  button.btn { padding: 9px 16px; background: var(--primary-light); color: white;
+               border: none; border-radius: 8px; cursor: pointer; font-size: .9rem;
+               font-weight: 500; }
+  button.btn:hover { background: var(--primary); }
+  button.btn:disabled { background: var(--gray); cursor: not-allowed; opacity: .6; }
+  button.btn.small { padding: 4px 8px; font-size: .78rem; }
+  button.btn.icon-only { padding: 4px 8px; }
+
+  .jobs-banner { background: #fff5e0; border-left: 4px solid var(--yellow);
+                 padding: 12px 14px; border-radius: 8px; margin-bottom: 18px;
+                 font-size: .9rem; display: none; }
+  .jobs-banner.show { display: block; }
+  .jobs-banner.done-ok { background: #f0fff4; border-left-color: var(--green); }
+  .jobs-banner.done-bad { background: #fff5f5; border-left-color: var(--red); }
+  .jobs-banner .row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; }
+  .jobs-banner .dismiss { cursor: pointer; opacity: .5; padding: 2px 8px; }
+  .jobs-banner .dismiss:hover { opacity: 1; }
+
+  .filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .filters select, .filters input {
+    padding: 6px 10px; border: 1px solid var(--gray-light);
+    border-radius: 6px; font-size: .85rem;
+  }
+  .filters input[type="text"] { min-width: 200px; }
+  .filters .count { margin-left: auto; font-size: .8rem; color: var(--text-light); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--card-bg);
+          border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--gray-light);
+           font-size: .85rem; vertical-align: top; }
+  th { background: #f1f5f9; color: var(--text-light); font-weight: 600;
+       text-transform: uppercase; font-size: .72rem; letter-spacing: .03em; }
+  tr.review-row { cursor: pointer; transition: background .1s; }
+  tr.review-row:hover { background: #f7fafc; }
+  tr.review-row td.pr-title { color: var(--text); }
+  tr.review-row .status-icon { font-size: 1rem; }
+  tr.review-row .status-icon.ok { color: var(--green); }
+  tr.review-row .status-icon.bad { color: var(--red); }
+  tr.review-row .actions { white-space: nowrap; }
+  tr.review-row .actions a { color: var(--primary-light); text-decoration: none; margin-right: 8px; }
+  tr.review-row .actions a:hover { text-decoration: underline; }
+  tr.detail-row { background: #fafbfc; }
+  tr.detail-row td { padding: 16px 20px; border-bottom: 2px solid var(--gray-light); }
+  tr.detail-row .cr-body { font-size: .85rem; max-height: 600px; overflow-y: auto;
+                           border: 1px solid var(--gray-light); padding: 14px;
+                           background: white; border-radius: 8px; }
+  tr.detail-row .cr-body h1, tr.detail-row .cr-body h2, tr.detail-row .cr-body h3 { color: var(--primary); margin: .8em 0 .4em; }
+  tr.detail-row .cr-body pre { background: var(--code-bg); padding: 10px; border-radius: 6px; overflow-x: auto; }
+  tr.detail-row .log-toggle { margin-top: 12px; font-size: .78rem; color: var(--primary-light); cursor: pointer; }
+  tr.detail-row .log-content { display: none; margin-top: 8px; padding: 10px;
+                               background: var(--code-bg); font-family: ui-monospace, "SF Mono", monospace;
+                               font-size: .75rem; white-space: pre-wrap; word-break: break-all;
+                               max-height: 300px; overflow-y: auto; border-radius: 6px; }
+  tr.detail-row .log-content.show { display: block; }
+
+  .empty-state, .loading { text-align: center; padding: 40px; color: var(--text-light); }
+  footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--gray-light);
+           font-size: .75rem; color: var(--text-light); text-align: center; }
+  footer a { color: var(--primary-light); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>🤖 Code Reviews &nbsp;<a href="/completo">← /completo</a></h1>
+    <div class="meta" id="last-update">carregando…</div>
+  </header>
+
+  <div class="panel">
+    <h2>Force-run em URL específica</h2>
+    <div class="force-row">
+      <input type="text" id="force-url" placeholder="https://github.com/owner/repo/pull/N" autocomplete="off">
+      <button class="btn" id="btn-force">↻ Rodar CR</button>
+    </div>
+    <div style="font-size:.75rem;color:var(--text-light);margin-top:6px;">
+      Custa 1 chamada de API (~$0.10-0.50). Pula o filtro do heartbeat.
+    </div>
+  </div>
+
+  <div class="jobs-banner" id="jobs-banner"></div>
+
+  <div class="panel">
+    <h2>Reviews recentes</h2>
+    <div class="filters">
+      <select id="f-repo"><option value="">repo: todos</option></select>
+      <select id="f-author"><option value="">autor: todos</option></select>
+      <select id="f-status">
+        <option value="">status: todos</option>
+        <option value="ok">✓ publicados</option>
+        <option value="failed">✗ não publicados</option>
+      </select>
+      <input type="text" id="f-search" placeholder="busca por título…">
+      <span class="count" id="row-count">—</span>
+    </div>
+  </div>
+
+  <table id="reviews-table">
+    <thead>
+      <tr>
+        <th>Hora</th><th>Repo</th><th>PR#</th><th>Título</th>
+        <th>Autor</th><th>OK</th><th>Ações</th>
+      </tr>
+    </thead>
+    <tbody id="reviews-body">
+      <tr><td colspan="7" class="loading">Carregando…</td></tr>
+    </tbody>
+  </table>
+
+  <footer>
+    Auto-refresh: lista a cada 30s • jobs a cada 3s quando ativos •
+    <a href="http://hinc-wiki.local:8001" target="_blank">Datasette</a> •
+    <a href="/completo/monitor/">📊 Monitor</a>
+  </footer>
+</div>
+
+<script src="/assets/vendor/marked.min.js"></script>
+<script>
+let allReviews = [];
+let activeJobs = [];
+let pollFastTimer = null;
+
+function fmtTime(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso.includes("T") ? iso : iso.replace(" ", "T") + "Z");
+    if (isNaN(d)) return iso;
+    return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  } catch { return iso; }
+}
+function fmtElapsed(sec) {
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+}
+
+async function fetchList() {
+  try {
+    const r = await fetch("/api/code-review/list?limit=200", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const d = await r.json();
+    allReviews = d.reviews;
+    fillSelect("f-repo", d.repos, "repo");
+    fillSelect("f-author", d.authors, "autor");
+    document.getElementById("last-update").textContent =
+      `atualizado às ${new Date().toLocaleTimeString("pt-BR")}  •  ${d.returned}/${d.total_in_db}`;
+    renderRows();
+  } catch (e) {
+    document.getElementById("last-update").textContent = "erro: " + e.message;
+  }
+}
+
+function fillSelect(id, items, label) {
+  const sel = document.getElementById(id);
+  const current = sel.value;
+  sel.innerHTML = `<option value="">${label}: todos</option>` +
+    items.map(x => `<option value="${x}">${x}</option>`).join("");
+  if (items.includes(current)) sel.value = current;
+}
+
+function renderRows() {
+  const repo = document.getElementById("f-repo").value;
+  const author = document.getElementById("f-author").value;
+  const status = document.getElementById("f-status").value;
+  const search = document.getElementById("f-search").value.toLowerCase();
+
+  const filtered = allReviews.filter(r => {
+    if (repo && r.repo !== repo) return false;
+    if (author && r.pr_creator !== author) return false;
+    if (status === "ok" && !r.runned) return false;
+    if (status === "failed" && r.runned) return false;
+    if (search && !(r.pr_name || "").toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  const body = document.getElementById("reviews-body");
+  document.getElementById("row-count").textContent = `${filtered.length} reviews`;
+
+  if (filtered.length === 0) {
+    body.innerHTML = `<tr><td colspan="7" class="empty-state">Nenhum review com esses filtros</td></tr>`;
+    return;
+  }
+  body.innerHTML = filtered.map(r => {
+    const okClass = r.runned ? "ok" : "bad";
+    const okIcon = r.runned ? "✓" : "✗";
+    const commentLink = r.comment_id
+      ? `<a href="${r.pr_url}#issuecomment-${r.comment_id}" target="_blank">comment ↗</a>`
+      : "";
+    return `
+      <tr class="review-row" data-id="${r.id}">
+        <td>${fmtTime(r.runned_at)}</td>
+        <td>${r.repo}</td>
+        <td>#${r.pr_number}</td>
+        <td class="pr-title">${escapeHtml(r.pr_name)}</td>
+        <td>${r.pr_creator}</td>
+        <td><span class="status-icon ${okClass}">${okIcon}</span></td>
+        <td class="actions">
+          <a href="${r.pr_url}" target="_blank">PR ↗</a>
+          ${commentLink}
+          <button class="btn icon-only" onclick="event.stopPropagation();forceRun('${r.pr_url}')">↻</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  body.querySelectorAll("tr.review-row").forEach(tr => {
+    tr.addEventListener("click", () => toggleDetail(tr));
+  });
+}
+
+function escapeHtml(s) {
+  return String(s || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+function toggleDetail(tr) {
+  const id = tr.dataset.id;
+  const next = tr.nextSibling;
+  if (next && next.classList && next.classList.contains("detail-row")) {
+    next.remove();
+    return;
+  }
+  const r = allReviews.find(x => x.id == id);
+  if (!r) return;
+  const detail = document.createElement("tr");
+  detail.className = "detail-row";
+  const bodyHtml = r.cr_preview ? marked.parse(r.cr_preview + (r.cr_len > 200 ? "\n\n*(preview — body completo via Datasette ou link do comment)*" : "")) : "<em>(sem body)</em>";
+  detail.innerHTML = `
+    <td colspan="7">
+      <div class="cr-body">${bodyHtml}</div>
+      <div class="log-toggle" onclick="this.nextElementSibling.classList.toggle('show')">▾ ver log da execução</div>
+      <div class="log-content">head_sha: ${r.head_sha}\nrunned: ${r.runned}\ncomment_id: ${r.comment_id || "(nenhum)"}\npr_state: ${r.pr_state}</div>
+    </td>
+  `;
+  tr.parentNode.insertBefore(detail, tr.nextSibling);
+}
+
+async function fetchJobs() {
+  try {
+    const r = await fetch("/api/code-review/jobs", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const d = await r.json();
+    activeJobs = d.jobs;
+    renderJobsBanner(d.jobs, d.recently_done);
+    return d;
+  } catch (e) {
+    console.warn("jobs fetch failed:", e);
+    return null;
+  }
+}
+
+function renderJobsBanner(jobs, recently) {
+  const b = document.getElementById("jobs-banner");
+  if (jobs.length > 0) {
+    b.className = "jobs-banner show";
+    b.innerHTML = jobs.map(j =>
+      `<div class="row">
+        <span>⏳ rodando CR em <strong>${j.repo}#${j.pr_number || "?"}</strong> (${fmtElapsed(j.elapsed_sec || 0)})</span>
+        <span style="font-size:.75rem;color:var(--text-light);">pid ${j.pid || "?"} • job ${j.job_id}</span>
+      </div>`
+    ).join("");
+    return;
+  }
+  if (recently && recently.length > 0) {
+    const r = recently[0];
+    const ok = r.runned;
+    b.className = "jobs-banner show " + (ok ? "done-ok" : "done-bad");
+    b.innerHTML = `<div class="row">
+      <span>${ok ? "✓" : "✗"} PR #${r.pr_number} ${ok ? "revisado" : "falhou"}${r.comment_id ? ` — <a href="${r.url}#issuecomment-${r.comment_id}" target="_blank">comment ↗</a>` : ""}</span>
+      <span class="dismiss" onclick="document.getElementById('jobs-banner').className='jobs-banner';">×</span>
+    </div>`;
+    // Trigger 1 refresh extra da lista pra puxar a row nova
+    fetchList();
+    return;
+  }
+  b.className = "jobs-banner";
+  b.innerHTML = "";
+}
+
+async function forceRun(url) {
+  url = url || document.getElementById("force-url").value.trim();
+  if (!url) { alert("Informe a URL do PR."); return; }
+  if (!confirm(`Disparar /code-review em:\n${url}\n\nCusta 1 chamada de API.`)) return;
+
+  const btn = document.getElementById("btn-force");
+  btn.disabled = true;
+  try {
+    const r = await fetch("/api/code-review/force?url=" + encodeURIComponent(url), { method: "POST" });
+    const d = await r.json();
+    if (!r.ok) { alert(d.message || ("HTTP " + r.status)); return; }
+    document.getElementById("force-url").value = "";
+    // Inicia polling rápido
+    fetchJobs();
+    if (pollFastTimer) clearInterval(pollFastTimer);
+    pollFastTimer = setInterval(async () => {
+      const data = await fetchJobs();
+      if (data && data.jobs.length === 0) {
+        clearInterval(pollFastTimer);
+        pollFastTimer = null;
+      }
+    }, 3000);
+  } catch (e) {
+    alert("Erro: " + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Listeners
+document.getElementById("btn-force").addEventListener("click", () => forceRun());
+["f-repo", "f-author", "f-status", "f-search"].forEach(id => {
+  document.getElementById(id).addEventListener("input", renderRows);
+  document.getElementById(id).addEventListener("change", renderRows);
+});
+
+// Boot
+fetchList();
+fetchJobs();
+setInterval(fetchList, 30000);
+setInterval(() => { if (!pollFastTimer) fetchJobs(); }, 30000);
+</script>
+</body>
+</html>

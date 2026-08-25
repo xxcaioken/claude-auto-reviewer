@@ -193,6 +193,59 @@ Pra rodar mesmo sem login do user:
 sudo loginctl enable-linger $USER
 ```
 
+## Dashboard estilizado (opcional)
+
+Além do Datasette (visualizador SQL genérico), o repo provê um **dashboard estilizado** com tabela cronológica, filtros e botão pra **forçar code-review** em PR específico bypassando o filtro de deduplicação do heartbeat.
+
+Acesso típico (depois do deploy): `http://your-host.local/completo/code-reviews/` ou outro path no seu nginx.
+
+### Componentes (em `dashboard/`)
+
+| Arquivo | Função |
+|---|---|
+| `dashboard/web/index.html` | UI single-page (HTML/CSS/JS inline) |
+| `dashboard/cgi/cgi-cr-list.sh` | CGI lê `code_reviews` do SQLite → JSON |
+| `dashboard/cgi/cgi-cr-jobs.sh` | CGI lista jobs em vôo (`forced/*.json`) |
+| `dashboard/cgi/cgi-cr-force.sh` | CGI valida URL, enfileira, dispara runner em bg |
+| `dashboard/runner/run-forced-cr.py` | Runner Python — importa do `heartbeat.py`, compartilha lockfile |
+| `dashboard/nginx/code-review-locations.conf.example` | Snippet exemplo de nginx locations |
+
+### Pré-requisitos extras
+
+- **nginx** + **fcgiwrap** instalados e rodando (mesmo padrão de qualquer site CGI clássico)
+- Wiki/site servido pelo nginx onde o `index.html` do dashboard será colocado
+- O endpoint `/api/code-review/*` no nginx aponta pros CGIs via fcgiwrap (ver snippet `dashboard/nginx/...example`)
+- A página HTML faz `<script src="/assets/vendor/marked.min.js">` — você precisa servir `marked.min.js` (~38 KB) nesse path ou ajustar o `<script src>`
+
+### Instalação manual
+
+1. Symlinkar os CGI e runner:
+   ```bash
+   ln -sf $(pwd)/dashboard/cgi/cgi-cr-list.sh   ~/bin/cgi-cr-list.sh
+   ln -sf $(pwd)/dashboard/cgi/cgi-cr-jobs.sh   ~/bin/cgi-cr-jobs.sh
+   ln -sf $(pwd)/dashboard/cgi/cgi-cr-force.sh  ~/bin/cgi-cr-force.sh
+   ln -sf $(pwd)/dashboard/runner/run-forced-cr.py ~/bin/run-forced-cr.py
+   ```
+2. Copiar o HTML pro DocumentRoot do nginx:
+   ```bash
+   cp dashboard/web/index.html /var/www/seu-site/completo/code-reviews/index.html
+   ```
+3. Incluir o snippet `dashboard/nginx/code-review-locations.conf.example` no vhost (ajustar IPs e paths) e rodar `sudo nginx -t && sudo systemctl reload nginx`.
+
+### Segurança
+
+- IP allowlist no nginx restringe ao LAN local
+- CGI valida URL com regex `^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pull/[0-9]+$` antes de qualquer chamada
+- Repo da URL é validado contra `repos.txt` enabled=1 — só PRs de repos monitorados podem ser forçados
+- Rate-limit: 5 force-runs em 60 s
+- Lockfile compartilhado com heartbeat impede execuções concorrentes de `claude`
+- Runner roda como o user do fcgiwrap (sem `sudo`)
+- Arquivos de estado em `~/.claude/heartbeat/forced/` com `0600`
+
+### Spec completa
+
+`docs/specs/2026-05-11-code-review-dashboard-design.md` — arquitetura, fluxos de dados, tratamento de erros.
+
 ## Capacidade & limites
 
 | Métrica | Valor |
